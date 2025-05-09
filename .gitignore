@@ -1,0 +1,20 @@
+# NetBeans folders
+nbproject/private/
+build/
+dist/
+lib/
+*.bak
+*.log
+
+# Compiled class files
+*.class
+
+# Package Files #
+*.jar
+*.war
+*.ear
+*.exe
+
+# OS Files
+.DS_Store
+Thumbs.db
