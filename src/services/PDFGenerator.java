@@ -37,8 +37,10 @@ import java.text.SimpleDateFormat;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 public class PDFGenerator {
+    private static final float COLUMN_GAP = 20f; // Space between columns
+private static final float CONDITION_MARGIN = 50f; // Margin for conditions page
    public File generateContractPDF(Contrat contrat, Client client, SortieVoiture reservation) throws IOException {
-       if (contrat == null || client == null || reservation == null) {
+    if (contrat == null || client == null || reservation == null) {
         throw new IllegalArgumentException("Données du contrat incomplètes");
     }
     try (PDDocument document = new PDDocument()) {
@@ -50,7 +52,7 @@ public class PDFGenerator {
         final float textSize = 10;
         final float lineHeight = 12;
         final float margin = 50;
-        final float paragraphSpacing = 8;
+        final float paragraphSpacing = 20;
         
         final float conditionTitleSize = 11;  // Article titles
         final float conditionTextSize = 9;    // Article text
@@ -65,7 +67,6 @@ public class PDFGenerator {
             float y = page1.getMediaBox().getHeight() - margin;
 
             // 1. Header with 3-column layout
-            // Left: Company name and subtitle
             drawText(content, "Sté. JMCARS s.a.r.l", margin, y, titleFont, mainTitleSize);
             drawText(content, "Location de Voitures - RentCar", margin, y - lineHeight, textFont, textSize);
             
@@ -75,18 +76,14 @@ public class PDFGenerator {
                 if (logoStream != null) {
                     PDImageXObject logo = PDImageXObject.createFromByteArray(document, 
                         logoStream.readAllBytes(), "logo");
-                    float logoWidth = 70;  // Your image width
-                    float logoHeight = 64;   // Your image height
+                    float logoWidth = 70;
+                    float logoHeight = 64;
                     float logoX = (pageWidth - logoWidth) / 2;
-                    // Position logo vertically centered with text
-                    float logoY = y - logoHeight + 20;  // Adjusted positioning
+                    float logoY = y - logoHeight + 20;
                     content.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
                 }
             } catch (IOException e) {
                 System.err.println("Could not load company logo");
-                // Debugging help:
-                System.err.println("Tried to load from: " + 
-                    getClass().getResource("/resources/jm logo black (2).png"));
             }
             
             // Right: Contact info (vertical layout)
@@ -94,76 +91,113 @@ public class PDFGenerator {
             String[] contactInfo = {
                 "N° 14 Avenue Omar Benjelloune",
                 "Riad Salam, Agadir",
-                "Tél: 06 61 37 27 78", 
+                "Tél: 06 61 37 27 78",
                 "Email: contact@jmcars-location.com"
             };
-            
             for (String line : contactInfo) {
-                float textWidth = textFont.getStringWidth(line)/1000*textSize;
+                float textWidth = textFont.getStringWidth(line) / 1000 * textSize;
                 drawText(content, line, contactX - textWidth, y, textFont, textSize);
                 y -= lineHeight;
             }
-            
-            y = page1.getMediaBox().getHeight() - margin - (contactInfo.length * lineHeight) - lineHeight;
+            y = page1.getMediaBox().getHeight() - margin - (contactInfo.length * lineHeight) - lineHeight * 2;
 
             // 2. Main Title
             drawCenteredText(content, "CONTRAT DE LOCATION", pageWidth, y, titleFont, mainTitleSize);
             y -= lineHeight * 2;
-            
+
             // 3. Vehicle Info Section
-            y = drawSectionTitle(content, "VÉHICULE ET RESERVATION", margin, y, titleFont, sectionTitleSize, lineHeight);
-            y -= paragraphSpacing;
-            
-            String dateSortie = formatDate(reservation.getDateSortie());
-            String dateRetour = formatDate(reservation.getDateRetour());
-            
-            String[][] vehicleInfo = {
-                {"Marque:", reservation.getMarque()},
-                {"Modèle:", reservation.getModele()},
-                {"Immatriculation:", reservation.getImmatriculation()},
-                {"Durée:", reservation.getDureeEnJours() + " jours"},
-                {"Date de sortie:", dateSortie},
-                {"Date de retour:", dateRetour}
-            };
-            y = drawTable(content, margin, y, vehicleInfo, textFont, textSize, lineHeight, 120);
-            y -= lineHeight;
-            
-            // 4. Client Info Section
-            y = drawSectionTitle(content, "INFORMATIONS CLIENT", margin, y, titleFont, sectionTitleSize, lineHeight);
-            y -= paragraphSpacing;
-            
-            String[][] clientInfo = {
-                {"Nom:", client.getNom()},
-                {"Prénom:", client.getPrenom()},
-                {"CIN/Passeport:", client.getCin()},
-                {"Permis:", client.getPermis()},
-                {"Téléphone:", client.getTelephone()},
-                {"Adresse:", client.getAdresse()}
-            };
-            y = drawTable(content, margin, y, clientInfo, textFont, textSize, lineHeight, 120);
-            y -= lineHeight;
-            
+    y = drawSectionTitle(content, "VÉHICULE ET RÉSERVATION", margin, y, titleFont, sectionTitleSize, lineHeight);
+    y -= lineHeight;
+
+    // Vehicle info in a 2-column layout
+    float column1X = margin;
+    float column2X = margin + 200;
+
+    // Left column - Vehicle details
+    drawText(content, "Marque: " + reservation.getMarque(), column1X, y, textFont, textSize);
+    drawText(content, "Modèle: " + reservation.getModele(), column1X, y - lineHeight, textFont, textSize);
+    drawText(content, "Immatriculation: " + reservation.getImmatriculation(), column1X, y - lineHeight * 2, textFont, textSize);
+
+    // Right column - Rental dates
+    drawText(content, "Durée: " + reservation.getDureeEnJours(), column2X, y, textFont, textSize);
+    Date dateSortie = "Réservé".equals(reservation.getStatut()) ? 
+                    reservation.getDateReservation() : 
+                    reservation.getDateSortie() != null ? reservation.getDateSortie() : new Date();
+    drawText(content, "Date de sortie: " + formatDate(dateSortie), column2X, y - lineHeight, textFont, textSize);
+    drawText(content, "Date de retour: " + formatDate(reservation.getDateRetour()), column2X, y - lineHeight * 2, textFont, textSize);
+
+    // Permis image (smaller and better positioned)
+    if (client.getPermisImageData() != null) {
+        PDImageXObject permisImage = PDImageXObject.createFromByteArray(document, client.getPermisImageData(), "permis");
+        float permisWidth = 140;  // Reduced from 120
+        float permisHeight = 75;   // Reduced from 90
+        float permisImageX = pageWidth - margin - permisWidth;
+        content.drawImage(permisImage, permisImageX, y - permisHeight, permisWidth, permisHeight);
+        drawText(content, "Permis de conduire", permisImageX, y - permisHeight - 10, textFont, 8);
+    }
+
+    y -= lineHeight * 3 + 20;
+
+    // 4. Client Info Section
+    y = drawSectionTitle(content, "INFORMATIONS CLIENT", margin, y, titleFont, sectionTitleSize, lineHeight);
+    y -= lineHeight;
+
+    // Client info in a 2-column layout with CIN image
+    float clientColX = margin;
+    float initialClientY = y;
+
+    // Left column - Client details
+    drawText(content, "Nom: " + client.getNom(), clientColX, y, textFont, textSize);
+    drawText(content, "Prénom: " + client.getPrenom(), clientColX, y - lineHeight, textFont, textSize);
+    drawText(content, "CIN/Passeport: " + client.getCin(), clientColX, y - lineHeight * 2, textFont, textSize);
+    drawText(content, "Date expiration: " + formatDate(client.getCinExpiration()), clientColX, y - lineHeight * 3, textFont, textSize);
+    drawText(content, "Permis: " + client.getPermis(), clientColX, y - lineHeight * 4, textFont, textSize);
+    drawText(content, "Date expiration: " + formatDate(client.getPermisExpiration()), clientColX, y - lineHeight * 5, textFont, textSize);
+    drawText(content, "Téléphone: " + client.getTelephone(), clientColX, y - lineHeight * 6, textFont, textSize);
+    drawText(content, "Adresse: " + client.getAdresse(), clientColX, y - lineHeight * 7, textFont, textSize);
+
+    // Second driver (middle column)
+    if (contrat.getSecondDriver() != null) {
+        Client secondDriver = contrat.getSecondDriver();
+        float secondDriverX = clientColX + 200;
+        drawText(content, "DEUXIÈME CONDUCTEUR", secondDriverX, initialClientY, titleFont, sectionTitleSize - 1);
+        drawText(content, "Nom: " + secondDriver.getNom(), secondDriverX, initialClientY - lineHeight * 1.5f, textFont, textSize);
+        drawText(content, "Prénom: " + secondDriver.getPrenom(), secondDriverX, initialClientY - lineHeight * 2.5f, textFont, textSize);
+        drawText(content, "CIN/Passeport: " + secondDriver.getCin(), secondDriverX, initialClientY - lineHeight * 3.5f, textFont, textSize);
+        drawText(content, "Permis: " + secondDriver.getPermis(), secondDriverX, initialClientY - lineHeight * 4.5f, textFont, textSize);
+        drawText(content, "Téléphone: " + secondDriver.getTelephone(), secondDriverX, initialClientY - lineHeight * 5.5f, textFont, textSize);
+        drawText(content, "Adresse: " + secondDriver.getAdresse(), secondDriverX, initialClientY - lineHeight * 6.5f, textFont, textSize);
+    }
+
+    // CIN Image (right column, smaller)
+    if (client.getCinImageData() != null) {
+        PDImageXObject cinImage = PDImageXObject.createFromByteArray(document, client.getCinImageData(), "cin");
+        float cinWidth = 140;   // Reduced from 120
+        float cinHeight = 75;   // Reduced from 90
+        float cinImageX = pageWidth - margin - cinWidth;
+        content.drawImage(cinImage, cinImageX, initialClientY - cinHeight, cinWidth, cinHeight);
+        drawText(content, "CIN/Passeport", cinImageX, initialClientY - cinHeight - 10, textFont, 8);
+    }
+
+    y = initialClientY - lineHeight * 8 - 10;
+
             // 5. Vehicle Condition Section
-            y = drawSectionTitle(content, "ETAT DU VÉHICULE", margin, y, titleFont, sectionTitleSize, lineHeight);
+            y = drawSectionTitle(content, "ÉTAT DU VÉHICULE", margin, y, titleFont, sectionTitleSize, lineHeight);
             y -= paragraphSpacing;
 
             float imageWidth = 180;
             float imageHeight = 120;
             float imageX = pageWidth - margin - imageWidth;
-            float colWidth = (pageWidth - 2*margin)/2;
-            // Left side - Checkboxes
+            float colWidth = (pageWidth - 2 * margin) / 2;
             String[][] vehicleCondition = {
                 {"[ ] Carrosserie", "[ ] Pneus"},
                 {"[ ] Sièges", "[ ] Autres: " + (contrat.getAutresRemarques() != null ? contrat.getAutresRemarques() : "")}
             };
 
-            // Mark checked options
             if (contrat.isCarrosserieOk()) vehicleCondition[0][0] = "[X] Carrosserie";
             if (contrat.isPneusOk()) vehicleCondition[0][1] = "[X] Pneus";
             if (contrat.isSiegesOk()) vehicleCondition[1][0] = "[X] Sièges";
-            if (contrat.isSiegesOk()) vehicleCondition[1][0] = "[X] Autres";
 
-            // Draw checkboxes
             float checkboxY = y;
             for (String[] row : vehicleCondition) {
                 drawText(content, row[0], margin, checkboxY, textFont, textSize);
@@ -171,41 +205,40 @@ public class PDFGenerator {
                 checkboxY -= lineHeight;
             }
 
-            // Right side - Car inspection image
             try {
                 InputStream imageStream = getClass().getResourceAsStream("/resources/car_inspection.png");
                 if (imageStream != null) {
-                    PDImageXObject image = PDImageXObject.createFromByteArray(document, 
-                        imageStream.readAllBytes(), "car_inspection");
-                    content.drawImage(image, imageX, y - imageHeight, imageWidth, imageHeight);
+                    PDImageXObject image = PDImageXObject.createFromByteArray(document, imageStream.readAllBytes(), "car_inspection");
+                    float actualY = Math.max(y - imageHeight, margin);
+                    content.drawImage(image, imageX, actualY, imageWidth, imageHeight);
                 }
             } catch (IOException e) {
-                System.err.println("Could not load car inspection image");
+                content.setNonStrokingColor(Color.LIGHT_GRAY);
+                content.addRect(imageX, y - imageHeight, imageWidth, imageHeight);
+                content.fill();
             }
+            y -= paragraphSpacing;
+            y -= vehicleCondition.length * lineHeight;
 
-            y -= Math.max(imageHeight, vehicleCondition.length * lineHeight) + lineHeight;
-
-             // 6. Selected Options Section
-            y = drawSectionTitle(content, "OPTIONS SELECTIONNÉES", margin, y, titleFont, sectionTitleSize, lineHeight);
+            // 6. Selected Options Section
+            y = drawSectionTitle(content, "OPTIONS SÉLECTIONNÉES", margin, y, titleFont, sectionTitleSize, lineHeight);
             y -= paragraphSpacing;
             String[][] options = {
                 {"[ ] Roue de secours", "[ ] Cric"},
                 {"[ ] Siège bébé", "[ ] Clé de roue"}
             };
-            
-            // Mark selected options
             if (contrat.isRoueSecours()) options[0][0] = "[X] Roue de secours";
             if (contrat.isCric()) options[0][1] = "[X] Cric";
             if (contrat.isSiegeBebe()) options[1][0] = "[X] Siège bébé";
             if (contrat.isCleRoue()) options[1][1] = "[X] Clé de roue";
-            
+
             for (String[] row : options) {
                 drawText(content, row[0], margin, y, textFont, textSize);
-                drawText(content, row[1], margin + colWidth, y, textFont, textSize);
+                drawText(content, row[1], margin + 150, y, textFont, textSize);
                 y -= lineHeight;
             }
             y -= lineHeight;
-            
+
             // 7. Pricing Section
             y = drawSectionTitle(content, "TARIFS ET PAIEMENT", margin, y, titleFont, sectionTitleSize, lineHeight);
             y -= paragraphSpacing;
@@ -219,30 +252,27 @@ public class PDFGenerator {
             };
             y = drawTable(content, margin, y, pricingInfo, textFont, textSize, lineHeight, 120);
             y -= lineHeight;
-            
+
             // 8. Signatures Section
             y = drawSectionTitle(content, "SIGNATURES", margin, y, titleFont, sectionTitleSize, lineHeight);
             y -= paragraphSpacing;
             drawText(content, "Le Locataire", margin + 50, y, textFont, textSize);
             drawText(content, "Le Loueur", margin + 300, y, textFont, textSize);
             y -= lineHeight * 3;
-            
-            // Signature lines
             content.setLineWidth(1f);
             content.moveTo(margin + 50, y);
             content.lineTo(margin + 200, y);
             content.stroke();
-            
             content.moveTo(margin + 300, y);
             content.lineTo(margin + 450, y);
             content.stroke();
             y -= lineHeight * 2;
-            
+
             // 9. Observations
             y = drawSectionTitle(content, "OBSERVATIONS", margin, y, titleFont, sectionTitleSize, lineHeight);
             y -= paragraphSpacing;
             String observations = "Je reconnais avoir pris connaissance des conditions générales au verso de ce contrat et m'engage à les respecter.";
-            for (String line : wrapText(observations, pageWidth - 2*margin, textFont, textSize)) {
+            for (String line : wrapText(observations, pageWidth - 2 * margin, textFont, textSize)) {
                 drawText(content, line, margin, y, textFont, textSize);
                 y -= lineHeight;
             }
@@ -254,64 +284,28 @@ public class PDFGenerator {
         
         try (PDPageContentStream content = new PDPageContentStream(document, page2)) {
             float y = page2.getMediaBox().getHeight() - margin;
-            float columnWidth = (page2.getMediaBox().getWidth() - 3*margin)/2;
+            float columnWidth = (page2.getMediaBox().getWidth() - 3 * margin) / 2;
             
-            // Conditions title
             drawCenteredText(content, "CONDITIONS GENERALES", page1.getMediaBox().getWidth(), y, titleFont, 14);
             y -= lineHeight * 2;
             y -= paragraphSpacing;
             
-            // Two columns
             float leftX = margin;
             float rightX = margin * 2 + columnWidth;
-            
             float leftY = y;
-    leftY = drawConditionArticle(content, "Article 1 - UTILISATION DE VOITURES", 
-        getArticle1Text(), leftX, leftY, columnWidth, titleFont, textFont, 
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
-    
-    leftY = drawConditionArticle(content, "Article 2 - ÉTAT DE VOITURE", 
-        getArticle2Text(), leftX, leftY, columnWidth, titleFont, textFont,
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
-    
-    leftY = drawConditionArticle(content, "Article 3 - ESSENCE ET HUILES", 
-        getArticle3Text(), leftX, leftY, columnWidth, titleFont, textFont,
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
-    
-    leftY = drawConditionArticle(content, "Article 4 - ENTRETIEN ET RÉPARATIONS", 
-        getArticle4Text(), leftX, leftY, columnWidth, titleFont, textFont,
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
-    
-    
+            leftY = drawConditionArticle(content, "Article 1 - UTILISATION DE VOITURES", getArticle1Text(), leftX, leftY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight);
+            leftY = drawConditionArticle(content, "Article 2 - ÉTAT DE VOITURE", getArticle2Text(), leftX, leftY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight);
+            leftY = drawConditionArticle(content, "Article 3 - ESSENCE ET HUILES", getArticle3Text(), leftX, leftY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight);
+            leftY = drawConditionArticle(content, "Article 4 - ENTRETIEN ET RÉPARATIONS", getArticle4Text(), leftX, leftY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight);
 
-    // Column 2 (Articles 7-11) 
-    float rightY = y;
-    rightY = drawConditionArticle(content, "Article 5 - ASSURANCES", 
-        getArticle5Text(),  rightX, rightY, columnWidth, titleFont, textFont,
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
-    
-    rightY = drawConditionArticle(content, "Article 6 - LOCATION", 
-        getArticle6Text(),  rightX, rightY, columnWidth, titleFont, textFont,
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
-    rightY = drawConditionArticle(content, "Article 7 - RAPATRIEMENT DE VOITURE", 
-        getArticle7Text(), rightX, rightY, columnWidth, titleFont, textFont,
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
-    
-    rightY = drawConditionArticle(content, "Article 8 - PAPIERS DE VOITURE", 
-        getArticle8Text(), rightX, rightY, columnWidth, titleFont, textFont,
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
-    
-    rightY = drawConditionArticle(content, "Article 9 - RESPONSABILITÉ", 
-        getArticle9Text(), rightX, rightY, columnWidth, titleFont, textFont,
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
-    
-    rightY = drawConditionArticle(content, "Article 10 - COMPÉTENCE ", 
-        getArticle10Text(), rightX, rightY, columnWidth, titleFont, textFont,
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
-    
-    rightY = drawConditionArticle(content, "Article 11 - DÉLAI ET CONTRAVENTIONS", 
-        getArticle11Text(), rightX, rightY, columnWidth, titleFont, textFont,
-        conditionTitleSize, conditionTextSize, conditionLineHeight);
+            float rightY = y;
+            rightY = drawFlowingConditionArticle(content, "Article 5 - ASSURANCES", getArticle5Text(), rightX, rightY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight, page2);
+            rightY = drawConditionArticle(content, "Article 6 - LOCATION", getArticle6Text(), rightX, rightY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight);
+            rightY = drawConditionArticle(content, "Article 7 - RAPATRIEMENT DE VOITURE", getArticle7Text(), rightX, rightY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight);
+            rightY = drawConditionArticle(content, "Article 8 - PAPIERS DE VOITURE", getArticle8Text(), rightX, rightY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight);
+            rightY = drawConditionArticle(content, "Article 9 - RESPONSABILITÉ", getArticle9Text(), rightX, rightY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight);
+            rightY = drawConditionArticle(content, "Article 10 - COMPÉTENCE", getArticle10Text(), rightX, rightY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight);
+            rightY = drawConditionArticle(content, "Article 11 - DÉLAI ET CONTRAVENTIONS", getArticle11Text(), rightX, rightY, columnWidth, titleFont, textFont, conditionTitleSize, conditionTextSize, conditionLineHeight);
         }
 
         // Save PDF
@@ -585,6 +579,52 @@ private String formatDate(Date date) {
     if (date == null) return "N/A";
     return new SimpleDateFormat("dd/MM/yyyy HH:mm").format(date);
 }
+private float drawFlowingConditionArticle(PDPageContentStream content, 
+                                        String title, String text,
+                                        float startX, float y,
+                                        float columnWidth, 
+                                        PDFont titleFont, PDFont textFont,
+                                        float titleSize, float textSize, 
+                                        float lineHeight,
+                                        PDPage page) throws IOException {
+    
+    float currentX = startX;
+    float pageHeight = page.getMediaBox().getHeight();
+    float bottomMargin = CONDITION_MARGIN;
+    
+    // Draw article title
+    drawText(content, title, currentX, y, titleFont, titleSize);
+    y -= lineHeight * 1.5f;
+    
+    // Split text into paragraphs
+    String[] paragraphs = text.split("\n\n");
+    
+    for (String paragraph : paragraphs) {
+        List<String> lines = wrapText(paragraph, columnWidth, textFont, textSize);
+        
+        for (String line : lines) {
+            // Check if we need to switch columns or pages
+            if (y < bottomMargin) {
+                if (currentX == startX) {
+                    // Move to right column
+                    currentX = startX + columnWidth + COLUMN_GAP;
+                    y = pageHeight - CONDITION_MARGIN - lineHeight*2; // Reset Y with some space
+                } else {
+                    // Would need to create new page here if implementing multi-page conditions
+                    break; // For now just stop drawing
+                }
+            }
+            
+            drawText(content, line, currentX, y, textFont, textSize);
+            y -= lineHeight;
+        }
+        
+        // Add paragraph spacing
+        y -= lineHeight * 0.5f;
+    }
+    
+    return y;
+}
 private String getArticle1Text() {
     return "Le locataire s'engage à ne pas laisser conduire la voiture par d'autres personnes que lui-même ou celles agrées par la loueur et dont il se porte garant,\n" +
 "et à n'utiliser le véhicule que pour ses besoins personnels. Il est interdit de faire la piste, de conduire en état d'ivresse, de participer à toute compétition, qu'elle soit, et d'utiliser le véhicule des fins illicites ou des transports de marchandises, le locataire s'engage à ne pas solliciter directement des documents douaniers il est interdit au locataire de surcharger le véhicule loué entranspor- tant un nombre de passagers supérieur à celui porté sur le contrat sous peine d'être déchu de l'assurance.";
@@ -594,13 +634,14 @@ private String getArticle1Text() {
     return " L'Essence est à la charge du client le locataire doit vérifier en permanence les niveaux d'huile et d'eau, et vérifier les niveaux de la boite de vitesse et du pont arrière tous les 1000 Kilomètres.Il justifiera de ses travaux par des factures correspondantes (qui lui seront remboursées) sous peine d'avoir à payer une indemnité pour usure anormale. ";
 }private String getArticle4Text() {
     return "L'usure mécanique normale est à la charge du loueur. Toutes les réparations provenant soit d'une usure anormale, soit d'une négligence de la part d'un loca- taire ou d'une cause accidentelle, seront à sa charge et exécutées par nos soins Dans le cas ou le véhicule serait immobilisé en dehors de la région, les réparations qu'elle soient dues à l'usure normale ou à une cause accidentelle, ne seront exécutées qu'après accord télégraphique du loueur ou par l'agence régionale de la marque du véhicule. Elles devront faire l'objet d'une facture acquittée et très détaillée, les pièces défectueuses remplacées devront être présentées avec la facture acquitée. En aucun cas et en aucun circonstance, le locataire ne pourra réclamer des dommages et intérêts, soit pour retard de la remise de la voiture ou annulation de la location, soit pour l'immobilisation dans le cas de réparations nécessitées par l'usure normale et effectuée au cours de la location, la responsabilité du loueur ne pourra jamais être invoquée, même en cas d'accident de personnes ou de choses ayant pu résulter de vis ou de défauts de construction ou de réparations antérieurs.";
-}private String getArticle5Text() {
+}/*private String getArticle5Text() {
     return "Le locataire est assuré pour les risques\n" +
 "suivants:\n" +
 "-Le vol et incendie du véhicule loué, à l'exclusion des vêtements et\n" +
 "une\n" +
 "- Le locataire s'engage à déclarer au loueur, dans les 48 heures et incendie, même partiel sous peine d'être déchu du bénéfice de immédiatement aux autorités de police, tout accidents, vol ou l'assurance. Sa déclaration devra obligatoirement mentionner les circonstances, la date, le lieu, l'heure, le numéro ou le nom de l'agent le nom et l'adresse des témoins ainsi que le numéro de la voiture de l'adversaire. s'il ya lieu il joindre à cette déclaration tout rapport de police, de gendarmerie ou constat d'huissier, s'il en à été établi, il ne devra en aucun cas discuter la responsabilité ni traiter ou transiger avec des tiers relativement à l'accident, il paiera somme de 200 dhs par jour indemnité de chômage de la voiture pendant toute la durée de location, passé ce délai le loueur décline toute responsabilité pour les accidents que le locataire aurait pu causer et dont il devra faire son affaire personnelle. Enfin il n y'a pas d'assurance pour tout conducteur non muni d'un permis en état de validité ou d'un permis datant de moins de six mois. le loueur décline toute responsabilité pour les accidents aux tiers ou dégât de la voiture que le locataire pourrait causer pendant la période de location si le locataire a délibérément fourni au loueur des informations fausses concernant son identité son adresse ou la validité de son permis de conduire.";
-}private String getArticle6Text() {
+}*/
+private String getArticle6Text() {
     return "Les prix de location, ainsi la caution, sont déterminées par les tarifs en vigueur et payable d'avance. la caution ne pourra servir en aucun une prolongation de location, Afin d'éviter toute contestation et pour le cas ou le locataire voudrait conserver la voiture pour un temps supérieur à celui indiqué sur le contrat, devra aprés avoir obtenu l'accord duloueur faire parvenirlemontant de la locationsup- plémentaire 48 heures avant l'expiratio de la location en cours sous peine de s'exposer à des poursuites pour détournement de voiture compte de 0 heure à 24 heures et toute journée commencée est dûé en entier.";
 }private String getArticle7Text() {
     return "Le locataire s'interdit formellement d'abandonner le véhicule.\n" +
@@ -614,5 +655,14 @@ private String getArticle1Text() {
 }
 private String getArticle11Text() {
     return "Pendant la durée de la location, le locataire sera responsable de tous délai ou contravention relevés à son encontre.";
+}
+private String getArticle5Text() {
+    return "Le locataire est assuré pour les risques suivants:\n\n" +
+           "- Le vol et incendie du véhicule loué, à l'exclusion des vêtements et objets personnels\n" +
+           "- Les dommages causés aux tiers\n\n" +
+           "Le locataire s'engage à déclarer au loueur, dans les 48 heures, tout accident, vol ou incendie, même partiel, sous peine d'être déchu du bénéfice de l'assurance. Sa déclaration doit mentionner:\n" +
+           "- Les circonstances\n- La date, le lieu et l'heure\n- Le numéro et nom de l'agent\n- Les coordonnées des témoins\n\n" +
+           "Il devra joindre à cette déclaration tout rapport de police ou constat d'huissier. Il ne devra en aucun cas discuter la responsabilité ni traiter directement avec des tiers.\n\n" +
+           "En cas d'immobilisation du véhicule, une indemnité de 200 DH par jour sera due après le délai initial de location. Le loueur décline toute responsabilité pour les accidents causés par un conducteur sans permis valide ou avec un permis de moins de 6 mois.";
 }
 }

@@ -8,6 +8,7 @@ package dao;
  *
  * @author samsung
  */
+import java.io.ByteArrayInputStream;
 import models.Client;
 import java.sql.*;
 import java.util.ArrayList;
@@ -40,12 +41,15 @@ public class ClientDAO {
     }
 }
 
- public static Client getClientByName(String nom, String prenom) throws SQLException {
-    String sql = "SELECT * FROM clients WHERE nom = ? AND prenom = ? LIMIT 1";
+public static Client getClientByName(String nom, String prenom) throws SQLException {
+    String sql = "SELECT * FROM clients WHERE nom = ? AND prenom = ?";
+    
     try (Connection conn = DBConnection.getConnection();
          PreparedStatement stmt = conn.prepareStatement(sql)) {
+        
         stmt.setString(1, nom);
         stmt.setString(2, prenom);
+        
         try (ResultSet rs = stmt.executeQuery()) {
             if (rs.next()) {
                 Client client = new Client();
@@ -56,49 +60,70 @@ public class ClientDAO {
                 client.setPermis(rs.getString("permis"));
                 client.setTelephone(rs.getString("telephone"));
                 client.setAdresse(rs.getString("adresse"));
+                client.setCinExpiration(rs.getDate("cin_expiration"));
+                client.setPermisExpiration(rs.getDate("permis_expiration"));
+                
+                // Get image data and filenames
+                client.setCinImageData(rs.getBytes("cin_image"));
+                client.setPermisImageData(rs.getBytes("permis_image"));
+                client.setCinFilename(rs.getString("cin_filename"));
+                client.setPermisFilename(rs.getString("permis_filename"));
+                
                 return client;
             }
-            return null;
         }
     }
+    return null;
 }
 // Updated addClient method with all fields
-public static int addClient(Client client) throws SQLException {
-    String sql = "INSERT INTO clients (nom, prenom, cin, permis, telephone, adresse) " +
-                "VALUES (?, ?, ?, ?, ?, ?)";
-    
-    try (Connection conn = DBConnection.getConnection();
-         PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+ public static int addClient(Client client) throws SQLException {
+        String sql = "INSERT INTO clients (nom, prenom, cin, permis, telephone, adresse, cin_expiration, permis_expiration, cin_image, permis_image, cin_filename, permis_filename) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
-        // Set all parameters including telephone and adresse
-        stmt.setString(1, client.getNom());
-        stmt.setString(2, client.getPrenom());
-        stmt.setString(3, client.getCin());
-        stmt.setString(4, client.getPermis());
-        
-        // Handle potential null values for telephone and adresse
-        stmt.setString(5, client.getTelephone() != null ? client.getTelephone() : "");
-        stmt.setString(6, client.getAdresse() != null ? client.getAdresse() : "");
-        
-        stmt.executeUpdate();
-        
-        try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
-            if (generatedKeys.next()) {
-                return generatedKeys.getInt(1);
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            
+            stmt.setString(1, client.getNom());
+            stmt.setString(2, client.getPrenom());
+            stmt.setString(3, client.getCin());
+            stmt.setString(4, client.getPermis());
+            stmt.setString(5, client.getTelephone());
+            stmt.setString(6, client.getAdresse());
+            stmt.setDate(7, client.getCinExpiration() != null ? new java.sql.Date(client.getCinExpiration().getTime()) : null);
+            stmt.setDate(8, client.getPermisExpiration() != null ? new java.sql.Date(client.getPermisExpiration().getTime()) : null);
+            
+            if (client.getCinImageData() != null) {
+                stmt.setBytes(9, client.getCinImageData());
+            } else {
+                stmt.setNull(9, Types.BLOB);
             }
+            
+            if (client.getPermisImageData() != null) {
+                stmt.setBytes(10, client.getPermisImageData());
+            } else {
+                stmt.setNull(10, Types.BLOB);
+            }
+            
+            stmt.setString(11, client.getCinFilename() != null ? client.getCinFilename() : "");
+            stmt.setString(12, client.getPermisFilename() != null ? client.getPermisFilename() : "");
+            
+            stmt.executeUpdate();
+            
+            try (ResultSet rs = stmt.getGeneratedKeys()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+            return -1;
         }
-        throw new SQLException("Creating client failed, no ID obtained.");
     }
-}
 // Get client by CIN (national ID)
-    public static Client getClientByCIN(String cin) throws SQLException {
+  public static Client getClientByCIN(String cin) throws SQLException {
         String sql = "SELECT * FROM clients WHERE cin = ?";
         
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, cin);
-            
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     Client client = new Client();
@@ -109,14 +134,28 @@ public static int addClient(Client client) throws SQLException {
                     client.setPermis(rs.getString("permis"));
                     client.setTelephone(rs.getString("telephone"));
                     client.setAdresse(rs.getString("adresse"));
+                    client.setCinExpiration(rs.getDate("cin_expiration"));
+                    client.setPermisExpiration(rs.getDate("permis_expiration"));
+                    Blob cinBlob = rs.getBlob("cin_image");
+                if (cinBlob != null) {
+                    client.setCinImageData(cinBlob.getBytes(1, (int)cinBlob.length()));
+                }
+                
+                Blob permisBlob = rs.getBlob("permis_image");
+                if (permisBlob != null) {
+                    client.setPermisImageData(permisBlob.getBytes(1, (int)permisBlob.length()));
+                }
+                    client.setCinFilename(rs.getString("cin_filename")); // NEW
+                    client.setPermisFilename(rs.getString("permis_filename")); // NEW
                     return client;
                 }
             }
+            return null;
         }
-        return null;
     }
-     public static void updateClient(Client client) throws SQLException {
-        String sql = "UPDATE clients SET nom=?, prenom=?, permis=?, telephone=?, adresse=? WHERE cin=?";
+     // Update client with images
+    public static boolean updateClient(Client client) throws SQLException {
+        String sql = "UPDATE clients SET nom=?, prenom=?, permis=?, telephone=?, adresse=?, cin_expiration=?, permis_expiration=?, cin_image=?, permis_image=?, cin_filename=?, permis_filename=? WHERE id=?";
         
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -126,9 +165,26 @@ public static int addClient(Client client) throws SQLException {
             stmt.setString(3, client.getPermis());
             stmt.setString(4, client.getTelephone());
             stmt.setString(5, client.getAdresse());
-            stmt.setString(6, client.getCin());
+            stmt.setDate(6, client.getCinExpiration() != null ? new java.sql.Date(client.getCinExpiration().getTime()) : null);
+            stmt.setDate(7, client.getPermisExpiration() != null ? new java.sql.Date(client.getPermisExpiration().getTime()) : null);
             
-            stmt.executeUpdate();
+            if (client.getCinImageData() != null) {
+                stmt.setBytes(8, client.getCinImageData());
+            } else {
+                stmt.setNull(8, Types.BLOB);
+            }
+            
+            if (client.getPermisImageData() != null) {
+                stmt.setBytes(9, client.getPermisImageData());
+            } else {
+                stmt.setNull(9, Types.BLOB);
+            }
+            
+            stmt.setString(10, client.getCinFilename() != null ? client.getCinFilename() : "");
+            stmt.setString(11, client.getPermisFilename() != null ? client.getPermisFilename() : "");
+            stmt.setInt(12, client.getId());
+            
+            return stmt.executeUpdate() > 0;
         }
     }
 }

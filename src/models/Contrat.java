@@ -26,6 +26,7 @@ public class Contrat {
     private Date dateDebut;  // java.sql.Date
 private Date dateFin;
 private int reservationId;
+private Client secondDriver;
     
     // Vehicle state
     private boolean carrosserieOk;
@@ -266,4 +267,11 @@ private int reservationId;
 public void setReservationId(int reservationId) {
     this.reservationId = reservationId;
 }
+public Client getSecondDriver() {
+        return secondDriver;
+    }
+    
+    public void setSecondDriver(Client secondDriver) {
+        this.secondDriver = secondDriver;
+    }
 }

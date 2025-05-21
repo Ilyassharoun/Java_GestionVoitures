@@ -4,6 +4,8 @@
  */
 package models;
 
+import java.util.Date;
+
 /**
  *
  * @author samsung
@@ -16,6 +18,12 @@ public class Client {
     private String permis;
     private String adresse;
     private String Telephone;
+    private Date cinExpiration;
+    private Date permisExpiration;
+    private byte[] cinImageData;
+    private byte[] permisImageData;
+    private String cinFilename;  
+    private String permisFilename;  
 
     // Constructors
     public Client() {}
@@ -46,7 +54,36 @@ public class Client {
 
     public String getAdresse() { return adresse; }
     public void setAdresse(String adresse) { this.adresse = adresse; }
+    public Date getCinExpiration() {
+        return cinExpiration;
+    }
+    
+    public void setCinExpiration(Date cinExpiration) {
+        this.cinExpiration = cinExpiration;
+    }
+    
+    public Date getPermisExpiration() {
+        return permisExpiration;
+    }
+    
+    public void setPermisExpiration(Date permisExpiration) {
+        this.permisExpiration = permisExpiration;
+    }
+    public byte[] getCinImageData() { return cinImageData; }
+    public void setCinImageData(byte[] cinImageData) { this.cinImageData = cinImageData; }
+    public byte[] getPermisImageData() { return permisImageData; }
+    public void setPermisImageData(byte[] permisImageData) { this.permisImageData = permisImageData; }
+    public String getCinFilename() { return cinFilename; }
+    public void setCinFilename(String cinFilename) { this.cinFilename = cinFilename; }
+    public String getPermisFilename() { return permisFilename; }
+    public void setPermisFilename(String permisFilename) { this.permisFilename = permisFilename; }
+     public boolean hasCinImage() {
+        return cinImageData != null && cinImageData.length > 0;
+    }
 
+    public boolean hasPermisImage() {
+        return permisImageData != null && permisImageData.length > 0;
+    }
     @Override
     public String toString() {
         return nom + " " + prenom;

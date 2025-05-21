@@ -34,6 +34,8 @@ public class SortieVoiture {
     private Date dateReservation;
     private String statut;
     private String reservationDates;
+    private Date dateRetourEffectif;
+    private boolean estAnnule;
     
     // Getters and setters
     public int getId() { return id; }
@@ -95,13 +97,13 @@ public String getDureeEnJours() {
         // For reservations (date_sortie is null, date_debut is set)
         if (this.dateSortie == null && this.dateReservation != null && this.dateRetour != null) {
             long diff = this.dateRetour.getTime() - this.dateReservation.getTime();
-            long days = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS) + 1;
+            long days = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS);
             return days + " jours";
         }
         // For active rentals (date_sortie is set)
         else if (this.dateSortie != null && this.dateRetour != null) {
             long diff = this.dateRetour.getTime() - this.dateSortie.getTime();
-            long days = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS) + 1;
+            long days = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS) ;
             return days + " jours";
         }
     } catch (Exception e) {
@@ -146,5 +148,24 @@ public String getDureeEnJours() {
     public boolean isReservation2() {
         // If dateSortie is null but we have reservation dates, it's a reservation
         return dateSortie == null && dateReservation != null;
+    }
+    public Date getDateRetourEffectif() {
+        return dateRetourEffectif;
+    }
+
+    /**
+     * @return true if the reservation/sortie was cancelled
+     */
+    public boolean isEstAnnule() {
+        return estAnnule;
+    }
+
+    // Corresponding setters
+    public void setDateRetourEffectif(Date dateRetourEffectif) {
+        this.dateRetourEffectif = dateRetourEffectif;
+    }
+
+    public void setEstAnnule(boolean estAnnule) {
+        this.estAnnule = estAnnule;
     }
 }

@@ -10,6 +10,8 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 import models.Client;
 import models.Voiture;
 
@@ -311,35 +313,61 @@ public static SortieVoiture getSortieByClientName(String nomClient) throws SQLEx
     }
     return null;
 }
- public static List<SortieVoiture> getAllReservationsWithVehicles() throws SQLException {
-        String sql = "SELECT s.*, v.marque, v.modele, v.plaque_immatriculation " +
-                     "FROM sorties s " +
-                     "JOIN voitures v ON s.voiture_id = v.id";
+public static List<SortieVoiture> getAllReservationsWithVehicles() throws SQLException {
+    String sql = "SELECT s.*, v.marque, v.modele, v.plaque_immatriculation as plaque " +
+                 "FROM sorties s " +
+                 "JOIN voitures v ON s.voiture_id = v.id";
+    
+    try (Connection conn = DBConnection.getConnection();
+         PreparedStatement stmt = conn.prepareStatement(sql);
+         ResultSet rs = stmt.executeQuery()) {
         
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
+        List<SortieVoiture> reservations = new ArrayList<>();
+        while (rs.next()) {
+            SortieVoiture reservation = new SortieVoiture();
+            // Set basic fields
+            reservation.setId(rs.getInt("id"));
+            reservation.setClient(rs.getString("client"));
+            reservation.setVoitureId(rs.getInt("voiture_id"));
+            reservation.setDateSortie(rs.getDate("date_sortie"));
+            reservation.setAvance(rs.getDouble("avance"));
             
-            List<SortieVoiture> reservations = new ArrayList<>();
-            while (rs.next()) {
-                SortieVoiture reservation = new SortieVoiture();
-                reservation.setId(rs.getInt("id"));
-                reservation.setClient(rs.getString("client"));
-                reservation.setVoitureId(rs.getInt("voiture_id"));
-                reservation.setDateSortie(rs.getDate("date_sortie"));
-                reservation.setAvance(rs.getDouble("avance"));
-                reservation.setModele(rs.getString("modele"));
-                
-                // Add vehicle information
-                reservation.setMarque(rs.getString("marque"));
-                reservation.setImmatriculation(rs.getString("plaque"));
-                
-                reservations.add(reservation);
-            }
-            return reservations;
+            // Set vehicle information - CRITICAL PART
+            reservation.setMarque(rs.getString("marque"));
+            reservation.setModele(rs.getString("modele"));
+            reservation.setImmatriculation(rs.getString("plaque")); // Note the alias
+            
+            // Set reservation status
+            reservation.setReservation(rs.getBoolean("is_reservation"));
+            
+            reservations.add(reservation);
+        }
+        return reservations;
+    }
+}
+ // Temporary debug method - add this to your DAO class
+public static void debugQueryResults() throws SQLException {
+    String sql = "SELECT s.*, v.marque, v.modele, v.plaque_immatriculation " +
+                 "FROM sorties s " +
+                 "JOIN voitures v ON s.voiture_id = v.id";
+    
+    try (Connection conn = DBConnection.getConnection();
+         PreparedStatement stmt = conn.prepareStatement(sql);
+         ResultSet rs = stmt.executeQuery()) {
+        
+        System.out.println("Debugging query results:");
+        System.out.println("ID | Client | Marque | Modele | Plaque");
+        while (rs.next()) {
+            System.out.println(
+                rs.getInt("id") + " | " +
+                rs.getString("client") + " | " +
+                rs.getString("marque") + " | " +
+                rs.getString("modele") + " | " +
+                rs.getString("plaque_immatriculation")
+            );
         }
     }
-
+}
     // Get specific reservation with vehicle info
     public static SortieVoiture getReservationWithVehicle(String nomClient) throws SQLException {
         String sql = "SELECT s.*, v.marque, v.modele, v.plaque_immatriculation,s.date_sortie, s.date_retour " +
@@ -407,6 +435,7 @@ public static SortieVoiture getSortieByClientName(String nomClient) throws SQLEx
                 reservation.setDateSortie(rs.getDate("date_sortie"));
                 reservation.setDateRetour(rs.getDate("date_retour"));
                 reservation.setAvance(rs.getDouble("avance"));
+                reservation.setReservation(rs.getBoolean("is_reservation")); 
                 
                 // Vehicle info from join
                 reservation.setMarque(rs.getString("marque"));
@@ -419,5 +448,100 @@ public static SortieVoiture getSortieByClientName(String nomClient) throws SQLEx
     }
     return null; // No reservation found
 }
+    public static List<SortieVoiture> getActiveReservations() throws SQLException {
+        // Use date_retour to determine if reservation is completed
+        String sql = "SELECT sv.* FROM sorties sv " +
+                     "WHERE sv.date_retour > CURRENT_DATE OR sv.date_retour IS NULL";
+        
+        List<SortieVoiture> reservations = new ArrayList<>();
+        
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            
+            while (rs.next()) {
+                SortieVoiture reservation = mapResultSetToSortieVoiture(rs);
+                reservations.add(reservation);
+            }
+        }
+        return reservations;
+    }
+
+    /**
+     * Marks a reservation as completed by setting return date
+     */
+    public static boolean completeReservation(int sortieId) throws SQLException {
+        String sql = "UPDATE sorties SET date_retour = CURRENT_DATE " +
+                     "WHERE id = ? AND date_retour > CURRENT_DATE";
+        
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, sortieId);
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected > 0;
+        }
+    }
+
+ private static SortieVoiture mapResultSetToSortieVoiture(ResultSet rs) throws SQLException {
+    SortieVoiture sortie = new SortieVoiture();
     
+    // Required fields
+    sortie.setId(rs.getInt("id"));
+    sortie.setVoitureId(rs.getInt("voiture_id"));  // This was missing
+    sortie.setClient(rs.getString("client"));
+    
+    // Optional fields with null checks
+    sortie.setAvance(rs.getDouble("avance"));
+    if (rs.wasNull()) sortie.setAvance(0.0);
+    
+    // Date fields
+    sortie.setDateSortie(rs.getTimestamp("date_sortie"));
+    sortie.setDateRetour(rs.getTimestamp("date_retour"));
+    sortie.setDateDebut(rs.getTimestamp("date_debut"));
+    
+    // Boolean flags
+    sortie.setProlongee(rs.getBoolean("prolongee"));
+    sortie.setReservation(rs.getBoolean("is_reservation"));
+    
+    // Vehicle info (from join)
+    sortie.setMarque(rs.getString("marque"));
+    sortie.setModele(rs.getString("modele"));
+    sortie.setImmatriculation(rs.getString("plaque_immatriculation"));
+    
+    return sortie;
+}
+public static List<SortieVoiture> getActiveReservationsWithVehicles() throws SQLException {
+    // Triple-check column names match your database exactly
+    String sql = "SELECT "
+            + "sv.id, "
+            + "sv.voiture_id, " 
+            + "sv.client, "
+            + "sv.avance, "
+            + "sv.date_sortie, "
+            + "sv.date_retour, "
+            + "sv.prolongee, "
+            + "sv.is_reservation, "
+            + "sv.date_debut, "
+            + "v.marque, "
+            + "v.modele, "
+            + "v.plaque_immatriculation "
+            + "FROM sorties sv "
+            + "LEFT JOIN voitures v ON sv.voiture_id = v.id "
+            + "WHERE sv.date_retour > CURRENT_DATE OR sv.date_retour IS NULL";
+
+    try (Connection conn = DBConnection.getConnection();
+         PreparedStatement stmt = conn.prepareStatement(sql)) {
+        
+       
+        
+        try (ResultSet rs = stmt.executeQuery()) {
+            List<SortieVoiture> reservations = new ArrayList<>();
+            while (rs.next()) {
+                reservations.add(mapResultSetToSortieVoiture(rs));
+            }
+            return reservations;
+        }
+    }
+}
 }

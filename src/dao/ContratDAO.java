@@ -16,8 +16,8 @@ public class ContratDAO {
     public static int createContrat(Contrat contrat) throws SQLException {
         String sql = "INSERT INTO contrats (client_id, voiture_id, prix_journalier, duree, " +
                      "avance, mode_paiement, total, reste_a_payer, carrosserie_ok, pneus_ok, " +
-                     "sieges_ok, autres_remarques, roue_secours, cric, siege_bebe, cle_roue) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                     "sieges_ok, autres_remarques, roue_secours, cric, siege_bebe, cle_roue, is_printed) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -39,6 +39,7 @@ public class ContratDAO {
             stmt.setBoolean(14, contrat.isCric());
             stmt.setBoolean(15, contrat.isSiegeBebe());
             stmt.setBoolean(16, contrat.isCleRoue());
+            stmt.setBoolean(17, false); // is_printed defaults to false
             
             int affectedRows = stmt.executeUpdate();
             
@@ -53,6 +54,19 @@ public class ContratDAO {
                     throw new SQLException("Creating contract failed, no ID obtained.");
                 }
             }
+        }
+    }
+    public static void updateSecondDriver(int contratId, Integer secondDriverId) throws SQLException {
+        String sql = "UPDATE contrats SET second_driver_id = ? WHERE id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            if (secondDriverId != null) {
+                stmt.setInt(1, secondDriverId);
+            } else {
+                stmt.setNull(1, Types.INTEGER);
+            }
+            stmt.setInt(2, contratId);
+            stmt.executeUpdate();
         }
     }
 }
